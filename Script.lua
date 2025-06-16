@@ -10,7 +10,7 @@ Rayfield:CreateKeySystem({
    Keys = {"1X1", "2X2", "3X3"}
 })
 
-repeat task.wait() until Rayfield.KeySystemFinished == true
+repeat task.wait() until Rayfield.KeySystemFinished
 
 Rayfield:Notify({
    Title = "CCM is active",
@@ -22,7 +22,7 @@ Rayfield:Notify({
 local Window = Rayfield:CreateWindow({
    Name = "Custom Crystal Menu (CCM)",
    Theme = "AmberGlow",
-   ToggleUIKeybind = "N",
+   ToggleUIKeybind = Enum.KeyCode.N,
 })
 
 local Tab1 = Window:CreateTab("Basic")
@@ -42,15 +42,16 @@ Tab1:CreateInput({
 Tab1:CreateButton({
    Name = "Create Part at Position",
    Callback = function()
-      local x, y, z = string.match(positionString, "(%-?%d+),%s*(%-?%d+),%s*(%-?%d+)")
+      local x, y, z = string.match(positionString, "(%-?%d+)[%s,]+(%-?%d+)[%s,]+(%-?%d+)")
       x, y, z = tonumber(x), tonumber(y), tonumber(z)
 
       if x and y and z then
-         local part = Instance.new("Part", workspace)
+         local part = Instance.new("Part")
          part.Size = Vector3.new(5, 1, 5)
          part.Position = Vector3.new(x, y, z)
          part.Anchored = true
          part.BrickColor = BrickColor.Random()
+         part.Parent = workspace
       else
          Rayfield:Notify({
             Title = "Invalid Input",
