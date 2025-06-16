@@ -3,9 +3,9 @@ local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/Robl
 Rayfield:CreateKeySystem({
    Title = "Custom Crystal Menu",
    Subtitle = "Key System",
-   Note = "Join the Discord: discord.gg/example",
+   Note = "Keys can be used multiple times!",
    FileName = "CCMKey",
-   SaveKey = true,
+   SaveKey = false,
    GrabKeyFromSite = false,
    Keys = {"1X1", "2X2", "3X3"}
 })
