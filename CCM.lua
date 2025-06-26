@@ -1,81 +1,366 @@
 local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-Rayfield:Notify({Title="✨ CCM Loaded",Content="Custom Crystal Menu!",Duration=4})
-local Win = Rayfield:CreateWindow({Name="Custom Crystal Menu",Theme="Serenity",ToggleUIKeybind=Enum.KeyCode.RightControl,KeySystem=false})
-local Player = game.Players.LocalPlayer
-local Mouse = Player:GetMouse()
-local parts,effects = {},{}
-local parseVec=function(s)local x,y,z=s:match("(%-?%d+),?(%-?%d+),?(%-?%d+)")return x and Vector3.new(x,y,z)end
-local hum=function()return Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")end
 
-local searchBar = Win:CreateSearchBox({ PlaceholderText="Search tools..." })
+Rayfield:Notify({
+    Title = "CCM Toolkit Loaded",
+    Content = "Welcome to Custom Crystal Menu",
+    Duration = 4,
+    Image = "shield-alert"
+})
 
-local function filter(tab)
-    local term=searchBar:Get()
-    for _,btn in ipairs(tab.Elements) do
-        btn.Instance.Visible = term=="" or btn.Name:lower():find(term:lower())
+local Window = Rayfield:CreateWindow({
+    Name = "Custom Crystal Menu (CCM)",
+    Theme = "AmberGlow",
+    ToggleUIKeybind = Enum.KeyCode.N,
+    KeySystem = true,
+    KeySettings = {
+        Title = "CCM | Keys",
+        Subtitle = "Enter your key!",
+        Note = "Keys can be used multiple times!",
+        FileName = "KeysCCM",
+        SaveKey = false,
+        GrabKeyFromSite = false,
+        Key = {"1X1", "2X2", "3X3", "BasicCCMKey1"}
+    }
+})
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+
+local function getHumanoid()
+    local char = LocalPlayer.Character
+    return char and char:FindFirstChildOfClass("Humanoid")
+end
+
+local function parseVector(str)
+    local x,y,z = string.match(str or "", "(-?%d+)[, ]*(-?%d+)[, ]*(-?%d+)")
+    if x and y and z then
+        return Vector3.new(tonumber(x), tonumber(y), tonumber(z))
     end
 end
-searchBar:OnChanged(function()
-    for _,tab in ipairs(Win.Tabs) do filter(tab) end
+
+local createdParts = {}
+
+-- Tab 1: Build & Player Mods
+local Tab1 = Window:CreateTab("Builder & Player")
+
+Tab1:CreateSection("Part Spawner")
+local spawnPos = "0,5,0"
+local spawnCount = 1
+local spawnSize = "4,1,4"
+
+Tab1:CreateInput({Name = "Position (X,Y,Z)", PlaceholderText = "0,5,0", Callback = function(v) spawnPos = v end})
+Tab1:CreateInput({Name = "Count", PlaceholderText = "1", Callback = function(v) spawnCount = tonumber(v) or 1 end})
+Tab1:CreateInput({Name = "Size (X,Y,Z)", PlaceholderText = "4,1,4", Callback = function(v) spawnSize = v end})
+
+Tab1:CreateButton({
+    Name = "Spawn Parts",
+    Callback = function()
+        local pos = parseVector(spawnPos)
+        local size = parseVector(spawnSize)
+        if pos and size then
+            for i = 1, spawnCount do
+                local p = Instance.new("Part")
+                p.Size = size
+                p.Position = pos + Vector3.new(0, (i-1) * (size.Y + 0.5), 0)
+                p.Anchored = true
+                p.Material = Enum.Material.Neon
+                p.BrickColor = BrickColor.Random()
+                p.Parent = workspace
+                table.insert(createdParts, p)
+            end
+            Rayfield:Notify({Title = "Spawned", Content = spawnCount .. " parts created", Duration = 2, Image = "shield-alert"})
+        else
+            Rayfield:Notify({Title = "Error", Content = "Invalid input format", Duration = 2, Image = "shield-alert"})
+        end
+    end
+})
+
+Tab1:CreateButton({
+    Name = "Clear Parts",
+    Callback = function()
+        for _, p in ipairs(createdParts) do p:Destroy() end
+        createdParts = {}
+        Rayfield:Notify({Title = "Cleared", Content = "All spawned parts removed", Duration = 2, Image = "shield-alert"})
+    end
+})
+
+Tab1:CreateSection("Player Movement")
+local speedSlider = Tab1:CreateSlider({Name = "WalkSpeed", Range = {0, 3000}, Increment = 1, CurrentValue = 16, Callback = function(v)
+    local hum = getHumanoid()
+    if hum then hum.WalkSpeed = v end
+end})
+local jumpSlider = Tab1:CreateSlider({Name = "JumpPower", Range = {0, 500}, Increment = 1, CurrentValue = 50, Callback = function(v)
+    local hum = getHumanoid()
+    if hum then hum.JumpPower = v end
+end})
+
+Tab1:CreateToggle({
+    Name = "Fly",
+    CurrentValue = false,
+    Callback = function(state)
+        local char = LocalPlayer.Character
+        if not char then return end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not hum or not root then return end
+        if state then
+            local BodyGyro = Instance.new("BodyGyro", root)
+            BodyGyro.Name = "FlyBG"
+            BodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+            BodyGyro.P = 9e4
+            BodyGyro.CFrame = root.CFrame
+            local BodyVelocity = Instance.new("BodyVelocity", root)
+            BodyVelocity.Name = "FlyBV"
+            BodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+            BodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            local UIS = game:GetService("UserInputService")
+            local speed = 100
+            local move = {W = false, A = false, S = false, D = false, Space = false, LeftShift = false}
+            local function updateVelocity()
+                local vel = Vector3.new()
+                if move.W then vel = vel + workspace.CurrentCamera.CFrame.LookVector end
+                if move.S then vel = vel - workspace.CurrentCamera.CFrame.LookVector end
+                if move.A then vel = vel - workspace.CurrentCamera.CFrame.RightVector end
+                if move.D then vel = vel + workspace.CurrentCamera.CFrame.RightVector end
+                if move.Space then vel = vel + Vector3.new(0, 1, 0) end
+                if move.LeftShift then vel = vel - Vector3.new(0, 1, 0) end
+                BodyVelocity.Velocity = vel.Unit * speed
+                if vel.Magnitude == 0 then BodyVelocity.Velocity = Vector3.new(0, 0, 0) end
+            end
+            local conn1 = UIS.InputBegan:Connect(function(input)
+                if input.KeyCode == Enum.KeyCode.W then move.W = true updateVelocity() end
+                if input.KeyCode == Enum.KeyCode.A then move.A = true updateVelocity() end
+                if input.KeyCode == Enum.KeyCode.S then move.S = true updateVelocity() end
+                if input.KeyCode == Enum.KeyCode.D then move.D = true updateVelocity() end
+                if input.KeyCode == Enum.KeyCode.Space then move.Space = true updateVelocity() end
+                if input.KeyCode == Enum.KeyCode.LeftShift then move.LeftShift = true updateVelocity() end
+            end)
+            local conn2 = UIS.InputEnded:Connect(function(input)
+                if input.KeyCode == Enum.KeyCode.W then move.W = false updateVelocity() end
+                if input.KeyCode == Enum.KeyCode.A then move.A = false updateVelocity() end
+                if input.KeyCode == Enum.KeyCode.S then move.S = false updateVelocity() end
+                if input.KeyCode == Enum.KeyCode.D then move.D = false updateVelocity() end
+                if input.KeyCode == Enum.KeyCode.Space then move.Space = false updateVelocity() end
+                if input.KeyCode == Enum.KeyCode.LeftShift then move.LeftShift = false updateVelocity() end
+            end)
+            hum.PlatformStand = true
+            flyConnections = {conn1, conn2}
+        else
+            if char:FindFirstChild("HumanoidRootPart"):FindFirstChild("FlyBG") then
+                char.HumanoidRootPart.FlyBG:Destroy()
+            end
+            if char:FindFirstChild("HumanoidRootPart"):FindFirstChild("FlyBV") then
+                char.HumanoidRootPart.FlyBV:Destroy()
+            end
+            local hum = getHumanoid()
+            if hum then hum.PlatformStand = false end
+            if flyConnections then
+                for _, con in pairs(flyConnections) do
+                    if con then con:Disconnect() end
+                end
+            end
+        end
+    end
+})
+
+-- Tab 2: Fun & Visual FX
+local Tab2 = Window:CreateTab("Fun & Visual")
+
+Tab2:CreateButton({Name = "Rainbow Skin", Callback = function()
+    local char = LocalPlayer.Character
+    if char then
+        task.spawn(function()
+            while true do
+                task.wait(0.1)
+                for _, p in ipairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then
+                        p.Color = Color3.fromHSV((tick() % 5) / 5, 1, 1)
+                    end
+                end
+            end
+        end)
+    end
+end})
+
+Tab2:CreateToggle({Name = "Spin Character", CurrentValue = false, Callback = function(v)
+    _G.spin = v
+end})
+RunService.RenderStepped:Connect(function()
+    if _G.spin then
+        local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if root then root.CFrame = root.CFrame * CFrame.Angles(0, math.rad(5), 0) end
+    end
 end)
 
-local b=Win:CreateTab("Builder")
-b:CreateInput({Name="Position",Callback=function(v)posStr=v end})
-b:CreateInput({Name="Size",Callback=function(v)sizeStr=v end})
-b:CreateInput({Name="Count",Callback=function(v)cnt=tonumber(v)or 1 end})
-b:CreateButton({Name="Spawn",Callback=function()
-    local p,s=parseVec(posStr),parseVec(sizeStr)
-    if p and s then for i=1,cnt do local pr=Instance.new("Part")pr.Size,pr.CFrame,pr.Anchored,pr.Material,pr.BrickColor,pr.TopSurface,pr.Parent=s,CFrame.new(p+Vector3.new(0,(i-1)*(s.Y+1),0)),true,Enum.Material.Neon,BrickColor.Random(),Enum.SurfaceType.Smooth,workspace table.insert(parts,pr)end end
+Tab2:CreateButton({Name = "Sparkles", Callback = function()
+    local head = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head")
+    if head then
+        local emitter = Instance.new("ParticleEmitter", head)
+        emitter.Texture = "rbxassetid://241865958"
+        emitter.Rate = 100
+        emitter.Lifetime = NumberRange.new(1)
+        emitter.Speed = NumberRange.new(0, 1)
+        delay(3, function() emitter:Destroy() end)
+    end
 end})
-b:CreateButton({Name="Clear All",Callback=function()for _,p in ipairs(parts)do p:Destroy()end parts={}end})
 
-local p=Win:CreateTab("Player Mods")
-p:CreateSlider({Name="Speed",Range={0,300},CurrentValue=16,Callback=function(v)if hum()then hum().WalkSpeed=v end end})
-p:CreateSlider({Name="Jump",Range={0,300},CurrentValue=50,Callback=function(v)if hum()then hum().JumpPower=v end end})
-p:CreateSlider({Name="Gravity",Range={-200,200},CurrentValue=196.2,Callback=function(v)workspace.Gravity=v end})
-p:CreateToggle({Name="Infinite Health",Callback=function(v)if v and hum()then local h=hum()h.Health,h.MaxHealth=math.huge,math.huge end end})
+Tab2:CreateSection("Emotes")
+local emotes = {
+    {Name = "Wave", Id = 455703516},
+    {Name = "Cheer", Id = 507766388},
+    {Name = "Point", Id = 507777826},
+    {Name = "Dance", Id = 16670852124},
+    {Name = "Sit", Id = 507763666},
+}
 
-local vf=Win:CreateTab("Visual FX")
-vf:CreateButton({Name="Rainbow Skin",Callback=function()local c=Player.Character if c then task.spawn(function()while wait(0.1)do for _,pr in ipairs(c:GetDescendants())do if pr:IsA("BasePart")then pr.Color=Color3.fromHSV(tick()%1,1,1)end end end end)end end})
-vf:CreateToggle({Name="Night Vision",Callback=function(v)local L=game.Lighting L.Brightness,L.Ambient= v and 6 or 2, v and Color3.fromRGB(50,50,50) or Color3.new(1,1,1)end})
-vf:CreateSlider({Name="FOV",Range={70,120},CurrentValue=70,Callback=function(v)workspace.CurrentCamera.FieldOfView=v end})
-vf:CreateToggle({Name="Trails",Callback=function(v)local c=Player.Character if c then for _,pr in ipairs(c:GetChildren())do if pr:IsA("BasePart")then if v then local a0,a1=Instance.new("Attachment",pr),Instance.new("Attachment",pr);local t=Instance.new("Trail",pr);t.Attachment0,t.Attachment1=a0,a1;t.Lifetime=0.5;t.Transparency=NumberSequence.new(0.5)else for _,ch in ipairs(pr:GetChildren())do if ch:IsA("Trail")or ch:IsA("Attachment")then ch:Destroy()end end end end end end end})
-vf:CreateButton({Name="Sparkle Head",Callback=function(localPlayer=Player)local hrp=localPlayer.Character and localPlayer.Character:FindFirstChild("Head")if hrp then local e=Instance.new("ParticleEmitter",hrp);e.Texture,e.Rate,e.Lifetime,e.Speed="rbxassetid://241865958",100,NumberRange.new(1),NumberRange.new(0,1);game:GetService("Debris"):AddItem(e,3)end end})
-vf:CreateDropdown({Name="Lighting",Options={"Day","Sunset","Night"},Callback=function(o)local L=game.Lighting;if o=="Day"then L.TimeOfDay,L.Brightness,L.OutdoorAmbient="12:00:00",2,Color3.fromRGB(200,200,200)elseif o=="Sunset"then L.TimeOfDay,L.Brightness,L.OutdoorAmbient="19:00:00",1.5,Color3.fromRGB(255,150,100)else L.TimeOfDay,L.Brightness,L.OutdoorAmbient="00:00:00",1,Color3.fromRGB(50,50,100)end end})
+local function playAnim(id)
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        local animator = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)
+        local anim = Instance.new("Animation")
+        anim.AnimationId = "rbxassetid://" .. id
+        local track = animator:LoadAnimation(anim)
+        track:Play()
+    end
+end
 
-local fu=Win:CreateTab("Fun")
-fu:CreateButton({Name="Sparkles",Callback=function(localPlayer=Player)local hrp=localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")if hrp then Instance.new("Sparkles",hrp)end end})
-fu:CreateButton({Name="Crystal Rain",Callback=function(localPlayer=Player)local hrp=localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")if hrp then for i=1,50 do local pr=Instance.new("Part",workspace);pr.Size,pr.Anchored,pr.Material=Vector3.new(0.3,0.3,0.3),true,Enum.Material.Neon;pr.Position=hrp.Position+Vector3.new(math.random(-20,20),30,math.random(-20,20));pr.BrickColor=BrickColor.Random();game:GetService("Debris"):AddItem(pr,5)end end end})
-fu:CreateButton({Name="Spin Char",Callback=function()effects.spin=not effects.spin;if effects.spin then game:GetService("RunService").RenderStepped:Connect(function(localPlayer=Player)local r=localPlayer.Character and localPlayer.Character:FindFirstChild("HumanoidRootPart")if r then r.CFrame=r.CFrame*CFrame.Angles(0,math.rad(10),0)end end)end end})
-fu:CreateButton({Name="Fake Kick",Callback=function()Rayfield:Notify({Title="Fake Kick",Content="You have been kicked!",Duration=3,Image="x"})end})
-fu:CreateButton({Name="Fake Ban",Callback=function()Rayfield:Notify({Title="Fake Ban",Content="You have been banned!",Duration=3,Image="shield-off"})end})
+for _, emote in pairs(emotes) do
+    Tab2:CreateButton({
+        Name = emote.Name,
+        Callback = function() playAnim(emote.Id) end
+    })
+end
 
-local esp=Win:CreateTab("ESP")
-esp:CreateToggle({Name="Player ESP",Callback=function(v)for _,h in ipairs(effects.esp or {})do h:Destroy()end;effects.esp={};if v then for _,pl in ipairs(game.Players:GetPlayers())do if pl~=Player and pl.Character then local h=Instance.new("Highlight",pl.Character);h.Adornee, h.FillColor, h.FillTransparency=pl.Character,Color3.new(1,0,0),0.5;table.insert(effects.esp,h)end end end end})
+Tab2:CreateSection("Visual Effects")
+Tab2:CreateToggle({Name = "Night Vision", CurrentValue = false, Callback = function(v)
+    if v then
+        Lighting.Brightness = 6
+        Lighting.Ambient = Color3.new(0.5, 0.5, 0.5)
+    else
+        Lighting.Brightness = 2
+        Lighting.Ambient = Color3.new(1, 1, 1)
+    end
+end})
 
-local pt=Win:CreateTab("Particles")
-local toggleFx=function(k,fn)if effects[k]then for _,o in ipairs(effects[k])do o.Destroy and o:Destroy()end;effects[k]=nil else effects[k]=fn()end end
-pt:CreateToggle({Name="Sparkles",Callback=function()toggleFx("spark",function()local arr={},c=Player.Character or Player.CharacterAdded:Wait();for _,p in ipairs(c:GetDescendants())do if p:IsA("BasePart")then local s=Instance.new("Sparkles",p);table.insert(arr,s)end end;return arr end)end})
-pt:CreateToggle({Name="Fire Aura",Callback=function()toggleFx("fire",function()local arr={},c=Player.Character or Player.CharacterAdded:Wait();for _,p in ipairs(c:GetDescendants())do if p:IsA("BasePart")then local f=Instance.new("Fire",p);f.Size=5;table.insert(arr,f)end end;return arr end)end})
-pt:CreateToggle({Name="Smoke Trail",Callback=function()toggleFx("smoke",function()local arr={},c=Player.Character or Player.CharacterAdded:Wait();for _,p in ipairs(c:GetDescendants())do if p:IsA("BasePart")then local s=Instance.new("Smoke",p);s.Size=3;s.Opacity=0.3;table.insert(arr,s)end end;return arr end)end})
-pt:CreateToggle({Name="Aura Ring",Callback=function()toggleFx("ring",function()local c=Player.Character or Player.CharacterAdded:Wait();local root=c:FindFirstChild("HumanoidRootPart");local arr,parts={}
-for a=0,360,30 do local p=Instance.new("Part",workspace);p.Size,p.Anchored,p.CanCollide=Vector3.new(0.3,0.3,0.3),true,false;p.Shape,p.Material,p.BrickColor=Enum.PartType.Ball,Enum.Material.Neon,BrickColor.Random();table.insert(parts,p)end
-local conn=game:GetService("RunService").Heartbeat:Connect(function()local t,i= tick(),0;for _,p in ipairs(parts)do i=i+1;local ang=math.rad((t*60+i*30)%360);p.Position=root.Position+Vector3.new(math.cos(ang)*5,0.5,math.sin(ang)*5)end end)
-for _,p in ipairs(parts)do table.insert(arr,p)end
-table.insert(arr,{Destroy=function()conn:Disconnect();for _,p in ipairs(parts)do p:Destroy()end end})
-return arr end)end})
-pt:CreateToggle({Name="Glow Body",Callback=function()toggleFx("glow",function()local arr={},c=Player.Character or Player.CharacterAdded:Wait();local h=Instance.new("Highlight",c);h.FillColor, h.FillTransparency, h.OutlineTransparency=Color3.new(1,0,1),0.5,1;table.insert(arr,h);return arr end)end})
+Tab2:CreateSlider({Name = "Brightness", Range = {0, 10}, Increment = 0.1, CurrentValue = 2, Callback = function(v)
+    Lighting.Brightness = v
+end})
 
-local devt=Win:CreateTab("Dev Tools")
-devt:CreateToggle({Name="Inspector",Callback=function(v)effects.inspect=v end})
-Mouse.Button1Down:Connect(function()if effects.inspect and Mouse.Target then Rayfield:Notify({Title="Inspect",Content="["..Mouse.Target.ClassName.."] "..Mouse.Target.Name,Duration=4})end end)
-do local sg=Instance.new("ScreenGui",Player:WaitForChild("PlayerGui"));local fr=Instance.new("Frame",sg);fr.Size,fr.Position,fr.BackgroundTransparency=UDim2.new(0,300,0,150),UDim2.new(0,0,0.6,0),0.7
-local tb=Instance.new("TextBox",fr);tb.Size,tb.TextWrapped,tb.TextColor3=UDim2.new(1,0,1,0),true,Color3.new(1,1,1)
-game:GetService("LogService").MessageOut:Connect(function(m,t)tb.Text=tb.Text.."["..t.Name.."] "..m.."\n")end)end
+Tab2:CreateDropdown({Name = "Theme", Options = {"AmberGlow", "Midnight", "Light", "Serenity", "Ocean"}, CurrentOption = "AmberGlow", Callback = function(v)
+    Rayfield:ChangeTheme(v)
+end})
 
-local ut=Win:CreateTab("Utilities")
-ut:CreateButton({Name="Spawn Block",Callback=function()local hrp=Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")if hrp then local b=Instance.new("Part");b.Size,b.Position,b.BrickColor=Vector3.new(4,4,4),hrp.Position+hrp.CFrame.LookVector*5,BrickColor.Random();b.Parent=workspace end end})
-ut:CreateButton({Name="Spawn Sphere",Callback=function()local hrp=Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")if hrp then local s=Instance.new("Part");s.Shape,s.Size,s.Position,s.BrickColor=Enum.PartType.Ball,Vector3.new(3,3,3),hrp.Position+hrp.CFrame.LookVector*5,BrickColor.Random();s.Parent=workspace end end})
-ut:CreateButton({Name="Grid 5x5",Callback=function()local hrp=Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")if hrp then local o=hrp.Position+Vector3.new(0,0,-10)for x=0,4 do for z=0,4 do local p=Instance.new("Part");p.Size,p.Position,p.Anchored,p.BrickColor=Vector3.new(1,1,1),o+Vector3.new(x*2,0,z*2),true,BrickColor.Random();p.Parent=workspace end end end end})
-ut:CreateButton({Name="Circle 12",Callback=function()local hrp=Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")if hrp then local o,r=hrp.Position,5 for i=1,12 do local a=math.rad(i*30);local p=Instance.new("Part");p.Size,p.Position,p.Anchored,p.BrickColor=Vector3.new(1,1,1),o+Vector3.new(math.cos(a)*r,0,math.sin(a)*r),true,BrickColor.Random();p.Parent=workspace end end end})
-ut:CreateButton({Name="Sine Wave",Callback=function()local hrp=Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")if hrp then local o=hrp.Position for i=1,50 do local p=Instance.new("Part");p.Size,p.Anchored=Vector3.new(1,1,1),true;p.Position=o+Vector3.new(i,math.sin(math.rad(i*15))*5,0);p.BrickColor=BrickColor.new(Color3.fromHSV((i/50)%1,1,1));p.Parent=workspace end end end})
+Tab2:CreateToggle({Name = "Trails", CurrentValue = false, Callback = function(v)
+    local char = LocalPlayer.Character
+    if char then
+        for _, limb in ipairs(char:GetChildren()) do
+            if limb:IsA("BasePart") then
+                if v then
+                    local a0 = Instance.new("Attachment", limb)
+                    local a1 = Instance.new("Attachment", limb)
+                    local trail = Instance.new("Trail", limb)
+                    trail.Attachment0 = a0
+                    trail.Attachment1 = a1
+                    trail.Lifetime = 0.5
+                    trail.Transparency = NumberSequence.new(0.5)
+                else
+                    for _, c in ipairs(limb:GetChildren()) do
+                        if c:IsA("Trail") or c:IsA("Attachment") then
+                            c:Destroy()
+                        end
+                    end
+                end
+            end
+        end
+    end
+end})
+
+-- Tab 3: Utilities & Teleports
+local Tab3 = Window:CreateTab("Utilities & Teleports")
+
+Tab3:CreateSection("Teleportation")
+local tpInput = ""
+Tab3:CreateInput({Name = "Teleport Position (X,Y,Z)", PlaceholderText = "0,10,0", Callback = function(v) tpInput = v end})
+Tab3:CreateButton({
+    Name = "Teleport",
+    Callback = function()
+        local pos = parseVector(tpInput)
+        local char = LocalPlayer.Character
+        if pos and char and char:FindFirstChild("HumanoidRootPart") then
+            char.HumanoidRootPart.CFrame = CFrame.new(pos)
+            Rayfield:Notify({Title = "Teleported", Content = "Teleported to " .. tpInput, Duration = 3, Image = "shield-alert"})
+        else
+            Rayfield:Notify({Title = "Error", Content = "Invalid teleport position", Duration = 3, Image = "shield-alert"})
+        end
+    end
+})
+
+Tab3:CreateSection("Misc Tools")
+
+Tab3:CreateButton({Name = "Clear Workspace Parts", Callback = function()
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj:IsA("Part") and not table.find(createdParts, obj) then
+            obj:Destroy()
+        end
+    end
+    Rayfield:Notify({Title = "Workspace Cleared", Content = "All workspace parts removed", Duration = 3, Image = "shield-alert"})
+end})
+
+Tab3:CreateButton({Name = "Rejoin Game", Callback = function()
+    game:GetService("TeleportService"):Teleport(game.PlaceId, LocalPlayer)
+end})
+
+Tab3:CreateButton({Name = "Force Reset Character", Callback = function()
+    LocalPlayer.Character:BreakJoints()
+end})
+
+Tab3:CreateButton({Name = "Toggle Full Bright", Callback = function()
+    if Lighting.Brightness < 20 then
+        Lighting.Brightness = 20
+        Lighting.GlobalShadows = false
+        Rayfield:Notify({Title = "FullBright ON", Content = "Extreme brightness enabled", Duration = 3, Image = "shield-alert"})
+    else
+        Lighting.Brightness = 2
+        Lighting.GlobalShadows = true
+        Rayfield:Notify({Title = "FullBright OFF", Content = "Brightness restored", Duration = 3, Image = "shield-alert"})
+    end
+end})
+
+Tab3:CreateToggle({Name = "Anti AFK", CurrentValue = false, Callback = function(v)
+    if v then
+        local vu = game:GetService("VirtualUser")
+        _G.AFKcon = RunService.Stepped:Connect(function()
+            vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            wait(1)
+            vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        end)
+    else
+        if _G.AFKcon then _G.AFKcon:Disconnect() _G.AFKcon = nil end
+    end
+end})
+
+Tab3:CreateSection("Game-Specific Teleports")
+
+local strongBattlegroundsTPs = {
+    {"Spawn", Vector3.new(0,5,0)},
+    {"Shop", Vector3.new(250,10,-300)},
+    {"Arena", Vector3.new(500,20,100)},
+    {"SafeZone", Vector3.new(-100,5,-100)},
+    {"Secret Base", Vector3.new(1000,50,1000)},
+}
+
+for _, tp in pairs(strongBattlegroundsTPs) do
+    Tab3:CreateButton({
+        Name = "Teleport to " .. tp[1],
+        Callback = function()
+            local char = LocalPlayer.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                char.HumanoidRootPart.CFrame = CFrame.new(tp[2])
+                Rayfield:Notify({Title = "Teleported", Content = "Teleported to " .. tp[1], Duration = 3, Image = "shield-alert"})
+            end
+        end
+    })
+end
